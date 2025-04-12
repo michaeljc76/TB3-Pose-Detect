@@ -61,7 +61,7 @@ def main():
                     mp_pose.POSE_CONNECTIONS,
                     landmark_drawing_spec=mp_drawing.DrawingSpec(color=(0, 255, 0),
                     connection_drawing_spec=mp_drawing.DrawingSpec(color=(0, 255, 0))
-                
+                    ))
                 # Add your pose control logic here
                 # Example: Check for specific gestures
                 
