@@ -1,84 +1,84 @@
 import cv2
-import numpy as np
 import mediapipe as mp
-from roboflow import Roboflow
+import numpy as np
+from os import listdir
+from os.path import isfile, join
 
-def main():
-    # Initialize RoboFlow face detection
-    rf = Roboflow(api_key="YOUR_ROBOFLOW_API_KEY")
-    project = rf.workspace().project("your-project-name")
-    face_model = project.version(1).model
+# Initialize MediaPipe Face Detection (lightweight)
+mp_face_detection = mp.solutions.face_detection
+mp_drawing = mp.solutions.drawing_utils
+face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.5)
+
+# Initialize MediaPipe Pose
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose()
+
+# Initialize LBPH Face Recognizer (lightweight)
+recognizer = cv2.face.LBPHFaceRecognizer_create()
+recognizer.read('face_recognizer.yml')  # Load trained model
+
+# Face database (name: id mapping)
+face_names = {
+    0: "Steve",
+    1: "Alice",
+    # Add more
+}
+
+# Camera setup
+cap = cv2.VideoCapture(0)
+cap.set(3, 640)  # Reduce resolution for Pi
+cap.set(4, 480)
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Convert to RGB
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     
-    # Initialize MediaPipe pose estimation
-    mp_pose = mp.solutions.pose
-    mp_drawing = mp.solutions.drawing_utils
-    pose = mp_pose.Pose()
+    # --- Face Detection & Identification ---
+    face_results = face_detection.process(rgb_frame)
     
-    # System state
-    authorized = False
-    
-    # Initialize webcam
-    cap = cv2.VideoCapture(0)
-    
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        # Convert frame to RGB (needed for both models)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # --- FACE DETECTION ---
-        try:
-            face_prediction = face_model.predict(rgb_frame, confidence=70).json()
+    if face_results.detections:
+        for detection in face_results.detections:
+            # Extract face bounding box
+            bboxC = detection.location_data.relative_bounding_box
+            ih, iw, _ = frame.shape
+            x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
+                         int(bboxC.width * iw), int(bboxC.height * ih)
             
-            # Check for authorized faces
-            authorized = False
-            for obj in face_prediction['predictions']:
-                x = int(obj['x'] - obj['width']/2)
-                y = int(obj['y'] - obj['height']/2)
-                w = int(obj['width'])
-                h = int(obj['height'])
-                
-                # Draw face bounding box (green if authorized, red otherwise)
-                color = (0, 255, 0) if authorized else (0, 0, 255)
-                cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-                
-                # Simple authorization logic (replace with your actual check)
-                if obj['confidence'] > 0.7:  # High confidence face
-                    authorized = True
-        
-        except Exception as e:
-            print(f"Face detection error: {e}")
-        
-        # --- POSE ESTIMATION (only if authorized) ---
-        if authorized:
-            pose_results = pose.process(rgb_frame)
-            if pose_results.pose_landmarks:
-                mp_drawing.draw_landmarks(
-                    frame, 
-                    pose_results.pose_landmarks, 
-                    mp_pose.POSE_CONNECTIONS,
-                    landmark_drawing_spec=mp_drawing.DrawingSpec(color=(0, 255, 0),
-                    connection_drawing_spec=mp_drawing.DrawingSpec(color=(0, 255, 0))
-                    ))
-                # Add your pose control logic here
-                # Example: Check for specific gestures
-                
-        # Display authorization status
-        status = "Authorized" if authorized else "Unauthorized"
-        cv2.putText(frame, f"Status: {status}", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, 
-                    (0, 255, 0) if authorized else (0, 0, 255), 2)
-        
-        cv2.imshow('Face Auth + Pose Control', frame)
-        
-        # Exit on 'q' or ESC
-        if cv2.waitKey(5) in (ord('q'), 27):
-            break
+            # Face ROI for recognition
+            face_roi = frame[y:y+h, x:x+w]
+            gray_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
+            
+            # Resize for recognizer
+            gray_face = cv2.resize(gray_face, (100, 100))
+            
+            # Perform recognition
+            id_, confidence = recognizer.predict(gray_face)
+            
+            # Draw results
+            if confidence < 70:  # Lower is better match
+                name = face_names.get(id_, "Unknown")
+                color = (0, 255, 0)  # Green for recognized
+            else:
+                name = "Unknown"
+                color = (0, 0, 255)  # Red for unknown
+            
+            cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+            cv2.putText(frame, f"{name} {confidence:.1f}", (x, y-10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-    cap.release()
-    cv2.destroyAllWindows()
+    # --- Pose Estimation ---
+    pose_results = pose.process(rgb_frame)
+    if pose_results.pose_landmarks:
+        mp_drawing.draw_landmarks(
+            frame, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
-if __name__ == "__main__":
-    main()
+    cv2.imshow("Face ID + Pose Tracking", frame)
+    if cv2.waitKey(5) & 0xFF == 27:
+        break
+
+cap.release()
+cv2.destroyAllWindows()
