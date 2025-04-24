@@ -16,13 +16,13 @@ class MoveAgent(Node):
         """Executes a movement command for a given duration."""
         cmd = Twist()
         if command == 'forward':
-            cmd.linear.x = -0.2
+            cmd.linear.x = -0.6
         elif command == 'backward':
-            cmd.linear.x = 0.2
+            cmd.linear.x = 0.6
         elif command == 'left':
-            cmd.angular.z = 0.5
+            cmd.angular.z = 1.0
         elif command == 'right':
-            cmd.angular.z = -0.5
+            cmd.angular.z = -1.0
         elif command == 'stop':
             cmd.linear.x = 0.0
             cmd.angular.z = 0.0
