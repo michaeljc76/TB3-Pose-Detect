@@ -59,12 +59,12 @@ async def main():
                 elif left_wrist.x < right_shoulder.x:
                     if time.time() - last360 >= timer360:
                         print("Left arm cross detected — 360!")
-                        await agent.move('left', 6.5)
+                        await agent.move('left', 6.7)
                         last360 = time.time()
                 elif right_wrist.x > left_shoulder.x:
                     if time.time() - last360 >= timer360:
                         print("Right arm cross detected — 360!")
-                        await agent.move('right', 6.5)
+                        await agent.move('right', 6.7)
                         last360 = time.time()
                 # Rotation
                 elif left_wrist.x > left_shoulder.x and abs(left_wrist.y - left_shoulder.y) < 0.1 and abs(left_wrist.x - left_shoulder.x) > shoulder_width * 0.6:
